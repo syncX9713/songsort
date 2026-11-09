@@ -403,6 +403,45 @@ p { margin: 0; }
 .done-counts li { display: flex; gap: 6px; align-items: center; justify-content: center; }
 .fail-list { margin: 6px 0 0; padding-left: 18px; display: grid; gap: 4px; max-height: 200px; overflow-y: auto; }
 
+/* ---------- downloader ---------- */
+
+.dl-home { display: grid; gap: 12px; }
+.dl-form { display: flex; gap: 10px; flex-wrap: wrap; }
+.dl-input { flex: 1 1 240px; min-width: 0; }
+.downloader { display: grid; gap: 16px; max-width: 760px; margin: 0 auto; }
+.downloader .back { justify-self: start; }
+.dl-panel { display: grid; gap: 12px; }
+.dl-panel h1 { font-size: 1.35rem; }
+.dl-error p { margin-top: 4px; }
+.song-card { display: grid; gap: 14px; }
+.song-head { display: flex; gap: 12px; align-items: center; min-width: 0; }
+.song-head h2 { font-size: 1.25rem; overflow-wrap: anywhere; }
+.info-rows { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 8px 12px; margin: 0; }
+.info-rows > div { background: var(--surface-2); border-radius: 10px; padding: 8px 12px; min-width: 0; }
+.info-rows dt { color: var(--text-2); font-size: 0.8rem; font-weight: 600; }
+.info-rows dd { margin: 2px 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.info-rows a, .store-links a { color: var(--accent); }
+.preview { width: 100%; }
+.dl-actions { display: flex; flex-wrap: wrap; gap: 10px; align-items: center; }
+.cand-list, .convert-list, .match-list { list-style: none; margin: 0; padding: 0; display: grid; gap: 8px; }
+.cand-list li, .convert-list li {
+  display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+  border: 1px solid var(--border); border-radius: 12px; padding: 10px 12px;
+}
+.cand-list li.is-original { border-color: var(--green); }
+.cand-main { display: grid; gap: 2px; min-width: 0; flex: 1 1 240px; }
+.badge-neutral { background: var(--surface-2); color: var(--text-2); }
+.convert-panel, .coll-panel, .platform-card { display: grid; gap: 12px; }
+.convert-list li > div { flex: 1 1 260px; min-width: 0; }
+.convert-progress { display: grid; gap: 6px; }
+.converted { display: grid; gap: 8px; }
+.converted h3 { font-size: 1rem; }
+.row-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+.match-list { padding-left: 4px; }
+.store-links ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 4px; }
+a.btn { color: inherit; }
+a.btn-primary { color: var(--on-accent); }
+
 /* ---------- small screens ---------- */
 
 @media (max-width: 600px) {

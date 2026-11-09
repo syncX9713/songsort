@@ -21,12 +21,14 @@ interface Props {
   onClearHistory: () => void;
   onViewScan: (id: string) => void;
   onRescan: (id: string) => void;
+  onDownloadLink: (url: string) => void;
 }
 
 export function Home(p: Props) {
   const fileInput = useRef<HTMLInputElement>(null);
   const dirInput = useRef<HTMLInputElement>(null);
   const [chooser, setChooser] = useState(false);
+  const [songLink, setSongLink] = useState('');
 
   useEffect(() => {
     dirInput.current?.setAttribute('webkitdirectory', '');
@@ -208,6 +210,32 @@ export function Home(p: Props) {
             <Icon name="alert" /> {p.error}
           </p>
         )}
+      </section>
+
+      <section className="panel dl-home" aria-labelledby="dl-title">
+        <h2 id="dl-title" className="panel-title"><Icon name="download" /> Download a Song</h2>
+        <form
+          className="dl-form"
+          noValidate
+          onSubmit={(e) => {
+            e.preventDefault();
+            p.onDownloadLink(songLink);
+          }}
+        >
+          <input
+            className="search dl-input"
+            type="text"
+            inputMode="url"
+            autoComplete="off"
+            spellCheck={false}
+            placeholder="Paste your song link here."
+            aria-label="Song link"
+            value={songLink}
+            onChange={(e) => setSongLink(e.target.value)}
+          />
+          <button type="submit" className="btn btn-primary" disabled={!songLink.trim()}>Check Link</button>
+        </form>
+        <p className="muted small">Every file is checked to make sure it is real, safe audio before you can save it.</p>
       </section>
 
       <section className="panel history" aria-labelledby="history-title">

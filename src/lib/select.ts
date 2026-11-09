@@ -68,6 +68,11 @@ function makeSource(file: File, path: string): SourceFile {
   return { id: nextId++, file, path, name: file.name, size: file.size, ext: extOf(file.name) };
 }
 
+/** A single file as a scan source (used by the downloader to compare a new song with a collection). */
+export function sourceFromFile(file: File, path: string): SourceFile {
+  return makeSource(file, path);
+}
+
 /** Files picked through an <input type="file"> (individual files, or a folder via webkitdirectory). */
 export function fromFileList(list: FileList | File[]): Selection {
   const sel = emptySelection();

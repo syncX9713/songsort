@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { Downloader } from './components/Downloader';
 import { Home } from './components/Home';
 import { Organize } from './components/Organize';
 import { PastScan } from './components/PastScan';
@@ -30,7 +31,7 @@ import {
 } from './lib/select';
 import type { Decisions, ScanResult } from './lib/types';
 
-type Stage = 'home' | 'scanning' | 'results' | 'past';
+type Stage = 'home' | 'scanning' | 'results' | 'past' | 'download';
 const noDecisions = (): Decisions => ({ exactKeep: {}, potential: {} });
 
 export default function App() {
@@ -51,6 +52,7 @@ export default function App() {
   const [currentScanId, setCurrentScanId] = useState<string | null>(null);
   const [viewingId, setViewingId] = useState<string | null>(null);
   const [rescanBusy, setRescanBusy] = useState(false);
+  const [downloadLink, setDownloadLink] = useState<{ url: string; n: number } | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const plan = useMemo(() => (result ? buildPlan(result, decisions) : []), [result, decisions]);
@@ -236,7 +238,7 @@ export default function App() {
 
   const goHome = () => {
     if (stage === 'results') newScan();
-    else if (stage === 'past') setStage(result ? 'results' : 'home');
+    else if (stage === 'past' || stage === 'download') setStage(result ? 'results' : 'home');
   };
 
   const viewing = history?.find((h) => h.id === viewingId) ?? null;
@@ -271,7 +273,15 @@ export default function App() {
             onClearHistory={clearAll}
             onViewScan={viewScan}
             onRescan={rescan}
+            onDownloadLink={(url) => {
+              setDownloadLink((d) => ({ url, n: (d?.n ?? 0) + 1 }));
+              setStage('download');
+              window.scrollTo({ top: 0 });
+            }}
           />
+        )}
+        {stage === 'download' && (
+          <Downloader key={downloadLink?.n ?? 0} initialUrl={downloadLink?.url} onBack={() => setStage(result ? 'results' : 'home')} />
         )}
         {stage === 'scanning' && (
           <Scanning progress={progress} total={selection.files.length} onCancel={() => abortRef.current?.abort()} />

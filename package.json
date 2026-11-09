@@ -8,12 +8,16 @@
     "start": "vite --open",
     "start:lan": "vite --host",
     "dev": "vite",
-    "build": "tsc --noEmit && vite build",
+    "build": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json && vite build",
     "preview": "vite preview --open",
-    "typecheck": "tsc --noEmit",
-    "make-samples": "node scripts/make-samples.mjs"
+    "typecheck": "tsc --noEmit && tsc --noEmit -p tsconfig.node.json",
+    "make-samples": "node scripts/make-samples.mjs",
+    "test-fixtures": "node scripts/fixture-server.mjs"
   },
   "dependencies": {
+    "@ffmpeg/core": "^0.12.10",
+    "@ffmpeg/ffmpeg": "^0.12.15",
+    "@ffmpeg/util": "^0.12.2",
     "client-zip": "^2.5.1",
     "hash-wasm": "^4.13.0",
     "music-metadata": "^12.3.5",
@@ -21,6 +25,7 @@
     "react-dom": "^19.3.1"
   },
   "devDependencies": {
+    "@types/node": "^26.6.6",
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "@vitejs/plugin-react": "^6.3.0",
