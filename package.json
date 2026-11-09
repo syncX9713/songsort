@@ -1,0 +1,30 @@
+{
+  "name": "songsort",
+  "version": "1.0.0",
+  "private": true,
+  "description": "SongSort – find duplicate songs and organize your music collection, entirely on your own device.",
+  "type": "module",
+  "scripts": {
+    "start": "vite --open",
+    "start:lan": "vite --host",
+    "dev": "vite",
+    "build": "tsc --noEmit && vite build",
+    "preview": "vite preview --open",
+    "typecheck": "tsc --noEmit",
+    "make-samples": "node scripts/make-samples.mjs"
+  },
+  "dependencies": {
+    "client-zip": "^2.5.1",
+    "hash-wasm": "^4.13.0",
+    "music-metadata": "^12.3.5",
+    "react": "^19.3.1",
+    "react-dom": "^19.3.1"
+  },
+  "devDependencies": {
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
+    "@vitejs/plugin-react": "^6.3.0",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.6"
+  }
+}
