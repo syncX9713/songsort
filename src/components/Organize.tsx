@@ -30,7 +30,16 @@ function testDestination(): FileSystemDirectoryHandle | undefined {
   return (window as unknown as { __songsortTestDestination?: FileSystemDirectoryHandle }).__songsortTestDestination;
 }
 
-export function Organize({ plan, onClose }: { plan: PlanItem[]; onClose: () => void }) {
+export function Organize({
+  plan,
+  onClose,
+  onFinished,
+}: {
+  plan: PlanItem[];
+  onClose: () => void;
+  /** Called after a completed (not cancelled) copy or ZIP, with where it went. */
+  onFinished?: (report: OrganizeReport, where: string) => void;
+}) {
   const [state, setState] = useState<State>({ kind: 'choose' });
   const abortRef = useRef<AbortController | null>(null);
   const summary = useMemo(() => summarizePlan(plan), [plan]);
@@ -69,6 +78,7 @@ export function Organize({ plan, onClose }: { plan: PlanItem[]; onClose: () => v
     try {
       const report = await copyToFolder(dest, plan, (progress) => setState({ kind: 'running', mode: 'folder', progress, destName: dest.name }), ac.signal);
       setState({ kind: 'done', report, destName: dest.name });
+      if (!report.cancelled) onFinished?.(report, `${dest.name}/${report.outputName}`);
     } catch (err) {
       setState({ kind: 'error', message: `Could not write to “${dest.name}”: ${errorMessage(err)} Try another destination, or download a ZIP instead.` });
     }
@@ -96,6 +106,7 @@ export function Organize({ plan, onClose }: { plan: PlanItem[]; onClose: () => v
       const { report, blob } = await exportZip(plan, (progress) => setState({ kind: 'running', mode: 'zip', progress }), ac.signal, handle);
       if (blob) triggerDownload(blob, `${OUTPUT_ROOT}.zip`);
       setState({ kind: 'done', report, blob, destName: handle?.name });
+      if (!report.cancelled) onFinished?.(report, handle?.name ?? report.outputName);
     } catch (err) {
       setState({ kind: 'error', message: `${errorMessage(err)} Your original files are untouched.` });
     }

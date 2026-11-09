@@ -9,13 +9,18 @@ interface Props {
   selection: Selection;
   listing: { found: number } | null;
   error: string | null;
-  history: ScanSummary[];
+  /** null while loading */
+  history: ScanSummary[] | null;
+  historyAvailable: boolean;
+  rescanBusy: boolean;
   onPickDirectory: () => void;
   onFiles: (files: FileList) => void;
   onCancelListing: () => void;
   onClear: () => void;
   onScan: () => void;
   onClearHistory: () => void;
+  onViewScan: (id: string) => void;
+  onRescan: (id: string) => void;
 }
 
 export function Home(p: Props) {
@@ -166,7 +171,7 @@ export function Home(p: Props) {
             {(sel.otherFiles > 0 || sel.ignoredFiles > 0 || sel.skippedFolders.length > 0) && (
               <ul className="notes">
                 {sel.otherFiles > 0 && <li>{plural(sel.otherFiles, 'other file')} (pictures, documents…) will be left out.</li>}
-                {sel.ignoredFiles > 0 && <li>{plural(sel.ignoredFiles, 'hidden system file')} that only look like music will be left out.</li>}
+                {sel.ignoredFiles > 0 && <li>{plural(sel.ignoredFiles, 'hidden system file')} that only {sel.ignoredFiles === 1 ? 'looks' : 'look'} like music will be left out.</li>}
                 {sel.skippedFolders.length > 0 && (
                   <li>
                     {plural(sel.skippedFolders.length, 'item')} skipped:{' '}
@@ -202,6 +207,56 @@ export function Home(p: Props) {
           <p className="callout callout-error" role="alert">
             <Icon name="alert" /> {p.error}
           </p>
+        )}
+      </section>
+
+      <section className="panel history" aria-labelledby="history-title">
+        <div className="panel-row">
+          <h2 id="history-title" className="panel-title"><Icon name="clock" /> Previous Scans</h2>
+          {(p.history?.length ?? 0) > 1 && (
+            <button type="button" className="btn btn-link" onClick={p.onClearHistory}>Delete all</button>
+          )}
+        </div>
+        {p.history === null ? (
+          <p className="muted small">Loading…</p>
+        ) : !p.historyAvailable ? (
+          <p className="muted small">This browser is not allowing SongSort to save anything (for example in a private window), so scans can’t be kept.</p>
+        ) : p.history.length === 0 ? (
+          <p className="history-empty muted">
+            Your scans will appear here, so you can look at their results again later. Only song names, locations and
+            sizes are saved, privately in this browser — never the music.
+          </p>
+        ) : (
+          <ul className="history-list">
+            {p.history.map((h) => (
+              <li key={h.id}>
+                <button type="button" className="history-open" onClick={() => p.onViewScan(h.id)} aria-label={`View report for ${h.source}`}>
+                  <div className="history-main">
+                    <strong title={h.source}>{h.source}</strong>
+                    <span className="muted small">{new Date(h.at).toLocaleString()}</span>
+                  </div>
+                  <div className="history-nums small">
+                    <span>{plural(h.files, 'file')}</span>
+                    <span className="tag tag-green">{h.unique.toLocaleString()} unique</span>
+                    <span className="tag tag-red">{plural(h.extraCopies, 'exact copy', 'exact copies')}</span>
+                    <span className="tag tag-amber">{h.potentialGroups.toLocaleString()} to review</span>
+                    {h.savableBytes > 0 && <span className="muted">{formatBytes(h.savableBytes)} savable</span>}
+                    {h.organized && <span className="tag tag-blue"><Icon name="check" size={12} /> Organized</span>}
+                  </div>
+                </button>
+                <div className="history-actions">
+                  {h.canRescan && caps.pickDirectory && (
+                    <button type="button" className="btn btn-ghost btn-small" onClick={() => p.onRescan(h.id)} disabled={p.rescanBusy}>
+                      Scan again
+                    </button>
+                  )}
+                  <button type="button" className="btn btn-ghost btn-small" onClick={() => p.onViewScan(h.id)}>
+                    View <Icon name="arrow" size={14} />
+                  </button>
+                </div>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
 
@@ -242,33 +297,6 @@ export function Home(p: Props) {
           </div>
         </div>
       </details>
-
-      {p.history.length > 0 && (
-        <section className="panel history" aria-labelledby="history-title">
-          <div className="panel-row">
-            <h2 id="history-title" className="panel-title"><Icon name="clock" /> Previous Scans</h2>
-            <button type="button" className="btn btn-link" onClick={p.onClearHistory}>Clear</button>
-          </div>
-          <p className="muted small">Summaries only, stored in this browser. To work with files again, select them and scan.</p>
-          <ul className="history-list">
-            {p.history.map((h) => (
-              <li key={h.at}>
-                <div className="history-main">
-                  <strong title={h.source}>{h.source}</strong>
-                  <span className="muted small">{new Date(h.at).toLocaleString()}</span>
-                </div>
-                <div className="history-nums small">
-                  <span>{plural(h.files, 'file')}</span>
-                  <span className="tag tag-green">{h.unique} unique</span>
-                  <span className="tag tag-red">{h.extraCopies} exact copies</span>
-                  <span className="tag tag-amber">{h.potentialGroups} to review</span>
-                  {h.savableBytes > 0 && <span className="muted">{formatBytes(h.savableBytes)} savable</span>}
-                </div>
-              </li>
-            ))}
-          </ul>
-        </section>
-      )}
     </div>
   );
 }

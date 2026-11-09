@@ -39,6 +39,8 @@ Your browser opens at http://localhost:5178. Keep the window open while you use 
 4. For each exact-duplicate group, pick the copy to keep. For each potential-duplicate group, listen and choose *Decide later*, *No, keep all* or *Yes, keep one*.
 5. Click **Organize My Music** and choose a destination folder, or download a ZIP file.
 
+**Previous Scans** (on the start screen) keeps a report of each scan: the song lists, the duplicate groups and whether you organized it. Reports are stored privately in your browser and contain song names, locations and sizes, never the music; the 20 most recent are kept. In Chrome or Edge on a computer, **Scan again** reopens a folder you scanned before (the browser may ask for permission first).
+
 ## How duplicates are found
 
 - **Exact duplicates:** files whose contents are byte-for-byte identical, confirmed with a SHA-256 fingerprint. Only files that share their exact size with another file need fingerprinting, because files of different sizes can't be identical.

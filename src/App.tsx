@@ -1,12 +1,23 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Home } from './components/Home';
 import { Organize } from './components/Organize';
+import { PastScan } from './components/PastScan';
 import { Results } from './components/Results';
 import { Scanning } from './components/Scanning';
 import { Icon } from './components/ui';
 import { errorMessage } from './lib/format';
-import { clearHistory, loadHistory, saveToHistory, type ScanSummary } from './lib/history';
-import { buildPlan, summarizePlan } from './lib/organize';
+import {
+  clearScans,
+  deleteScan,
+  getScanHandles,
+  listScans,
+  markOrganized,
+  regainAccess,
+  saveScan,
+  storageAvailable,
+  type ScanSummary,
+} from './lib/history';
+import { buildPlan, type OrganizeReport } from './lib/organize';
 import { scanFiles, type ScanProgress } from './lib/scan';
 import {
   describePickerError,
@@ -17,31 +28,79 @@ import {
   mergeSelections,
   type Selection,
 } from './lib/select';
-import { FOLDER_DUPLICATES, type Decisions, type ScanResult } from './lib/types';
+import type { Decisions, ScanResult } from './lib/types';
 
-type Stage = 'home' | 'scanning' | 'results';
+type Stage = 'home' | 'scanning' | 'results' | 'past';
 const noDecisions = (): Decisions => ({ exactKeep: {}, potential: {} });
 
 export default function App() {
   const [stage, setStage] = useState<Stage>('home');
   const [selection, setSelection] = useState<Selection>(emptySelection);
+  /** Folders picked with the File System Access API, kept so the scan can be repeated later. */
+  const [folderHandles, setFolderHandles] = useState<FileSystemDirectoryHandle[]>([]);
+  /** True once anything was added that cannot be re-opened later (individual files, classic folder input). */
+  const [hasOtherSources, setHasOtherSources] = useState(false);
   const [listing, setListing] = useState<{ found: number } | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [progress, setProgress] = useState<ScanProgress | null>(null);
   const [result, setResult] = useState<ScanResult | null>(null);
   const [decisions, setDecisions] = useState<Decisions>(noDecisions);
   const [organizing, setOrganizing] = useState(false);
-  const [history, setHistory] = useState<ScanSummary[]>(loadHistory);
+  const [history, setHistory] = useState<ScanSummary[] | null>(null);
+  const [historyAvailable, setHistoryAvailable] = useState(true);
+  const [currentScanId, setCurrentScanId] = useState<string | null>(null);
+  const [viewingId, setViewingId] = useState<string | null>(null);
+  const [rescanBusy, setRescanBusy] = useState(false);
   const abortRef = useRef<AbortController | null>(null);
 
   const plan = useMemo(() => (result ? buildPlan(result, decisions) : []), [result, decisions]);
+
+  const refreshHistory = useCallback(async () => setHistory(await listScans()), []);
+
+  useEffect(() => {
+    storageAvailable().then(setHistoryAvailable);
+    refreshHistory();
+  }, [refreshHistory]);
 
   const addSelection = useCallback((s: Selection) => {
     setError(null);
     setSelection((prev) => mergeSelections(prev, s));
   }, []);
 
+  const resetSelection = () => {
+    setSelection(emptySelection());
+    setFolderHandles([]);
+    setHasOtherSources(false);
+  };
+
   /* ---- choosing music ---- */
+
+  const loadFolders = useCallback(
+    async (handles: FileSystemDirectoryHandle[]) => {
+      const ac = new AbortController();
+      abortRef.current = ac;
+      setListing({ found: 0 });
+      let found = 0;
+      try {
+        for (const handle of handles) {
+          try {
+            const sel = await fromDirectoryHandle(handle, (n) => setListing({ found: found + n }), ac.signal);
+            found += sel.files.length;
+            addSelection(sel);
+            setFolderHandles((prev) => (prev.includes(handle) ? prev : [...prev, handle]));
+          } catch (err) {
+            if (ac.signal.aborted) return;
+            setError(
+              `Could not open “${handle.name}”: ${errorMessage(err)} If it is on a USB or external drive, connect the drive and try again.`,
+            );
+          }
+        }
+      } finally {
+        setListing(null);
+      }
+    },
+    [addSelection],
+  );
 
   const pickDirectory = async () => {
     setError(null);
@@ -53,28 +112,25 @@ export default function App() {
       if (msg) setError(msg);
       return;
     }
-    const ac = new AbortController();
-    abortRef.current = ac;
-    setListing({ found: 0 });
-    try {
-      const sel = await fromDirectoryHandle(handle, (found) => setListing({ found }), ac.signal);
-      addSelection(sel);
-    } catch (err) {
-      if (!ac.signal.aborted) setError(`Could not read “${handle.name}”: ${errorMessage(err)}`);
-    } finally {
-      setListing(null);
-    }
+    await loadFolders([handle]);
   };
 
-  const onFiles = (files: FileList) => addSelection(fromFileList(files));
+  const onFiles = (files: FileList) => {
+    setHasOtherSources(true);
+    addSelection(fromFileList(files));
+  };
 
-  // Development-only hook so automated tests can feed files without the native picker.
+  // Development-only hooks so automated tests can feed files and folders without the native pickers.
   useEffect(() => {
     if (!import.meta.env.DEV) return;
     (window as unknown as Record<string, unknown>).__songsort = {
-      addFiles: (entries: { file: File; path: string }[], label: string) => addSelection(fromPathEntries(entries, label)),
+      addFiles: (entries: { file: File; path: string }[], label: string) => {
+        setHasOtherSources(true);
+        addSelection(fromPathEntries(entries, label));
+      },
+      addFolder: (handle: FileSystemDirectoryHandle) => loadFolders([handle]),
     };
-  }, [addSelection]);
+  }, [addSelection, loadFolders]);
 
   /* ---- scanning ---- */
 
@@ -92,24 +148,26 @@ export default function App() {
       setDecisions(dec);
       setStage('results');
       window.scrollTo({ top: 0 });
-      const s = summarizePlan(buildPlan(res, dec));
-      setHistory(
-        saveToHistory({
-          at: res.scannedAt,
-          source: label,
-          files: res.files.length + res.unreadable.length,
-          totalBytes: res.files.reduce((a, f) => a + f.size, 0),
-          unique: res.uniqueIds.length,
-          exactGroups: res.exactGroups.length,
-          extraCopies: res.exactGroups.reduce((a, g) => a + g.fileIds.length - 1, 0),
-          potentialGroups: res.potentialGroups.length,
-          savableBytes: s.bytes[FOLDER_DUPLICATES],
-        }),
-      );
+      const reopenable = !hasOtherSources && folderHandles.length > 0 ? folderHandles : null;
+      setCurrentScanId(await saveScan(res, dec, reopenable));
+      refreshHistory();
     } catch (err) {
       setStage('home');
       if (!ac.signal.aborted) setError(`The scan stopped: ${errorMessage(err)}`);
     }
+  };
+
+  const onOrganized = async (report: OrganizeReport, where: string) => {
+    if (!currentScanId) return;
+    await markOrganized(currentScanId, {
+      at: Date.now(),
+      mode: report.mode,
+      where,
+      copied: report.copied,
+      failed: report.failed.length,
+      counts: report.counts,
+    });
+    refreshHistory();
   };
 
   const newScan = () => {
@@ -117,18 +175,76 @@ export default function App() {
     if (touched && !window.confirm('Start a new scan? Your choices for this scan will be lost.')) return;
     setResult(null);
     setDecisions(noDecisions());
-    setSelection(emptySelection());
+    setCurrentScanId(null);
+    resetSelection();
     setStage('home');
+  };
+
+  /* ---- previous scans ---- */
+
+  const viewScan = (id: string) => {
+    setViewingId(id);
+    setStage('past');
+    window.scrollTo({ top: 0 });
+  };
+
+  const rescan = async (id: string) => {
+    setError(null);
+    setRescanBusy(true);
+    try {
+      const handles = await getScanHandles(id);
+      if (!handles?.length) {
+        setError('This scan cannot be repeated automatically. Please select the music again.');
+        setStage('home');
+        return;
+      }
+      let allowed: FileSystemDirectoryHandle[];
+      try {
+        allowed = await regainAccess(handles);
+      } catch (err) {
+        allowed = [];
+        setError(`The browser did not reopen the folder: ${errorMessage(err)}`);
+      }
+      resetSelection();
+      setResult(null);
+      setStage('home');
+      window.scrollTo({ top: 0 });
+      if (allowed.length === 0) {
+        setError((e) => e ?? 'Access to the folder was not allowed, so it could not be scanned again.');
+        return;
+      }
+      await loadFolders(allowed);
+    } finally {
+      setRescanBusy(false);
+    }
+  };
+
+  const removeScan = async (id: string) => {
+    if (!window.confirm('Delete this saved report? Your music files are not affected.')) return;
+    await deleteScan(id);
+    if (currentScanId === id) setCurrentScanId(null);
+    await refreshHistory();
+    if (stage === 'past') setStage(result ? 'results' : 'home');
+  };
+
+  const clearAll = async () => {
+    if (!window.confirm('Delete all saved scan reports? Your music files are not affected.')) return;
+    await clearScans();
+    setCurrentScanId(null);
+    refreshHistory();
   };
 
   const goHome = () => {
     if (stage === 'results') newScan();
+    else if (stage === 'past') setStage(result ? 'results' : 'home');
   };
+
+  const viewing = history?.find((h) => h.id === viewingId) ?? null;
 
   return (
     <div className="app">
       <header className="topbar">
-        <button type="button" className="brand" onClick={goHome} disabled={stage !== 'results'} aria-label="SongSort home">
+        <button type="button" className="brand" onClick={goHome} disabled={stage === 'home' || stage === 'scanning'} aria-label="SongSort home">
           <span className="brand-mark"><Icon name="music" size={20} /></span>
           <span className="brand-name">SongSort</span>
         </button>
@@ -142,18 +258,19 @@ export default function App() {
             listing={listing}
             error={error}
             history={history}
+            historyAvailable={historyAvailable}
+            rescanBusy={rescanBusy}
             onPickDirectory={pickDirectory}
             onFiles={onFiles}
             onCancelListing={() => abortRef.current?.abort()}
             onClear={() => {
-              setSelection(emptySelection());
+              resetSelection();
               setError(null);
             }}
             onScan={startScan}
-            onClearHistory={() => {
-              clearHistory();
-              setHistory([]);
-            }}
+            onClearHistory={clearAll}
+            onViewScan={viewScan}
+            onRescan={rescan}
           />
         )}
         {stage === 'scanning' && (
@@ -169,9 +286,19 @@ export default function App() {
             onNewScan={newScan}
           />
         )}
+        {stage === 'past' && viewing && (
+          <PastScan
+            key={viewing.id}
+            summary={viewing}
+            rescanBusy={rescanBusy}
+            onBack={() => setStage(result ? 'results' : 'home')}
+            onRescan={() => rescan(viewing.id)}
+            onDelete={() => removeScan(viewing.id)}
+          />
+        )}
       </main>
 
-      {organizing && result && <Organize plan={plan} onClose={() => setOrganizing(false)} />}
+      {organizing && result && <Organize plan={plan} onClose={() => setOrganizing(false)} onFinished={onOrganized} />}
 
       <footer className="footer">SongSort runs entirely in your browser. No uploads, no accounts, nothing deleted.</footer>
     </div>
